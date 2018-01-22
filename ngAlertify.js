@@ -12,8 +12,6 @@ angular.module("ngAlertify", []).factory("alertify", function() {
     "use strict";
 
     var TRANSITION_FALLBACK_DURATION = 500;
-    var hasCss;
-
     var hideElement = function(el) {
 
         if (! el) {
@@ -26,6 +24,7 @@ angular.module("ngAlertify", []).factory("alertify", function() {
             }
         };
 
+        el.classList.remove("show");
         el.classList.add("hide");
         el.addEventListener("transitionend", removeThis);
 
@@ -42,6 +41,8 @@ angular.module("ngAlertify", []).factory("alertify", function() {
          */
         var _alertify = {
 
+            parent: document.body,
+            version: "1.0.11",
             defaultOkLabel: "Ok",
             okLabel: "Ok",
             defaultCancelLabel: "Cancel",
@@ -54,12 +55,24 @@ angular.module("ngAlertify", []).factory("alertify", function() {
             closeLogOnClickDefault: false,
             delay: 5000,
             defaultDelay: 5000,
-
+            logContainerClass: "alertify-logs",
+            logContainerDefaultClass: "alertify-logs",
             dialogs: {
                 buttons: {
                     holder: "<nav>{{buttons}}</nav>",
-                    ok: "<button class='ok' tabindex='-1'>{{ok}}</button>",
-                    cancel: "<button class='cancel' tabindex='-1'>{{cancel}}</button>"
+                    ok: "<button class='ok' tabindex='0'>{{ok}}</button>",
+                    cancel: "<button class='cancel' tabindex='0'>{{cancel}}</button>"
+                },
+                input: "<input type='text'>",
+                message: "<p class='msg'>{{message}}</p>",
+                log: "<div class='{{class}}'>{{message}}</div>"
+            },
+
+            defaultDialogs: {
+                buttons: {
+                    holder: "<nav>{{buttons}}</nav>",
+                    ok: "<button class='ok' tabindex='0'>{{ok}}</button>",
+                    cancel: "<button class='cancel' tabindex='0'>{{cancel}}</button>"
                 },
                 input: "<input type='text'>",
                 message: "<p class='msg'>{{message}}</p>",
@@ -79,7 +92,7 @@ angular.module("ngAlertify", []).factory("alertify", function() {
                 var html = "<div class='dialog'>" + "<div>" + this.dialogs.message.replace("{{message}}", item.message);
 
                 if(item.type === "confirm" || item.type === "prompt") {
-                    btnTxt = this.dialogs.buttons.cancel + this.dialogs.buttons.ok;
+                    btnTxt = this.dialogs.buttons.ok + this.dialogs.buttons.cancel;
                 }
 
                 if (item.type === "prompt") {
@@ -110,15 +123,19 @@ angular.module("ngAlertify", []).factory("alertify", function() {
             close: function(elem, wait) {
 
                 if (this.closeLogOnClick) {
-                    elem.addEventListener("click", function(ev) {
-                        hideElement(ev.srcElement);
+                    elem.addEventListener("click", function() {
+                        hideElement(elem);
                     });
                 }
 
-                if (wait > 0) {
+                wait = wait && !isNaN(+wait) ? +wait : this.delay;
+
+                if (wait < 0) {
+                    hideElement(elem);
+                } else if(wait > 0) {
                     setTimeout(function() {
                         hideElement(elem);
-                    }, (wait && !isNaN(+wait)) ? +wait : this.delay);
+                    }, wait);
                 }
 
             },
@@ -134,7 +151,7 @@ angular.module("ngAlertify", []).factory("alertify", function() {
              * @return {Object}
              */
             dialog: function(message, type, onOkay, onCancel) {
-                this.setup({
+                return this.setup({
                     type: type,
                     message: message,
                     onOkay: onOkay,
@@ -158,12 +175,34 @@ angular.module("ngAlertify", []).factory("alertify", function() {
                     var diff = existing.length - this.maxLogItems;
                     if (diff >= 0) {
                         for (var i = 0, _i = diff + 1; i < _i; i++) {
-                            this.close(existing[i], 1);
+                            this.close(existing[i], -1);
                         }
                     }
                 }
 
                 this.notify(message, type, click);
+            },
+
+            setLogPosition: function(str) {
+                this.logContainerClass = "alertify-logs " + str;
+            },
+
+            setupLogContainer: function() {
+
+                var elLog = document.querySelector(".alertify-logs");
+                var className = this.logContainerClass;
+                if (! elLog) {
+                    elLog = document.createElement("div");
+                    elLog.className = className;
+                    this.parent.appendChild(elLog);
+                }
+
+                // Make sure it's positioned properly.
+                if (elLog.className !== className) {
+                    elLog.className = className;
+                }
+
+                return elLog;
 
             },
 
@@ -180,20 +219,19 @@ angular.module("ngAlertify", []).factory("alertify", function() {
              */
             notify: function(message, type, click) {
 
+                var elLog = this.setupLogContainer();
                 var log = document.createElement("div");
+
                 log.className = (type || "default");
-                log.innerHTML = message;
+                if (_alertify.logTemplateMethod) {
+                    log.innerHTML = _alertify.logTemplateMethod(message);
+                } else {
+                    log.innerHTML = message;
+                }
 
                 // Add the click handler, if specified.
                 if ("function" === typeof click) {
                     log.addEventListener("click", click);
-                }
-
-                var elLog = document.querySelector(".alertify-logs");
-                if (! elLog) {
-                    elLog = document.createElement("div");
-                    elLog.className = "alertify-logs";
-                    document.body.appendChild(elLog);
                 }
 
                 elLog.appendChild(log);
@@ -219,44 +257,107 @@ angular.module("ngAlertify", []).factory("alertify", function() {
                 var btnOK = el.querySelector(".ok");
                 var btnCancel = el.querySelector(".cancel");
                 var input = el.querySelector("input");
+                var label = el.querySelector("label");
 
                 // Set default value/placeholder of input
                 if (input) {
                     if (typeof this.promptPlaceholder === "string") {
-                        input.placeholder = this.promptPlaceholder;
+                        // Set the label, if available, for MDL, etc.
+                        if (label) {
+                            label.textContent = this.promptPlaceholder;
+                        } else {
+                            input.placeholder = this.promptPlaceholder;
+                        }
                     }
                     if (typeof this.promptValue === "string") {
                         input.value = this.promptValue;
                     }
                 }
 
-                if (btnOK) {
-                    btnOK.addEventListener("click", function(ev) {
-                        if (item.onOkay && "function" === typeof item.onOkay) {
-                            if (input) {
-                                item.onOkay(input.value, ev);
-                            } else {
-                                item.onOkay(ev);
+                function setupHandlers(resolve) {
+                    if ("function" !== typeof resolve) {
+                        // promises are not available so resolve is a no-op
+                        resolve = function () {};
+                    }
+
+                    if (btnOK) {
+                        btnOK.addEventListener("click", function(ev) {
+                            if (item.onOkay && "function" === typeof item.onOkay) {
+                                if (input) {
+                                    item.onOkay(input.value, ev);
+                                } else {
+                                    item.onOkay(ev);
+                                }
                             }
-                        }
-                        hideElement(el);
-                    });
+
+                            if (input) {
+                                resolve({
+                                    buttonClicked: "ok",
+                                    inputValue: input.value,
+                                    event: ev
+                                });
+                            } else {
+                                resolve({
+                                    buttonClicked: "ok",
+                                    event: ev
+                                });
+                            }
+
+                            hideElement(el);
+                        });
+                    }
+
+                    if (btnCancel) {
+                        btnCancel.addEventListener("click", function(ev) {
+                            if (item.onCancel && "function" === typeof item.onCancel) {
+                                item.onCancel(ev);
+                            }
+
+                            resolve({
+                                buttonClicked: "cancel",
+                                event: ev
+                            });
+
+                            hideElement(el);
+                        });
+                    }
+
+                    if (input) {
+                        input.addEventListener("keyup", function(ev) {
+                            if (ev.currentTarget.value === "") {
+                                btnOK.setAttribute("disabled", "true");
+                            } else {
+                                btnOK.removeAttribute("disabled");
+                            }
+                            if (ev.which === 13) {
+                                btnOK.click();
+                            }
+                        });
+                    }
                 }
 
-                if (btnCancel) {
-                    btnCancel.addEventListener("click", function(ev) {
-                        if (item.onCancel && "function" === typeof item.onCancel) {
-                            item.onCancel(ev);
-                        }
-                        hideElement(el);
-                    });
+                var promise;
+
+                if (typeof Promise === "function") {
+                    promise = new Promise(setupHandlers);
+                } else {
+                    setupHandlers();
                 }
 
-                document.body.appendChild(el);
+                this.parent.appendChild(el);
                 setTimeout(function() {
                     el.classList.remove("hide");
+                    if(input && item.type && item.type === "prompt") {
+                        input.select();
+                        input.focus();
+                    } else {
+                        if (btnOK) {
+                            btnOK.focus();
+                        }
+                    }
                 }, 100);
 
+                return promise;
             },
 
             okBtn: function(label) {
@@ -265,8 +366,8 @@ angular.module("ngAlertify", []).factory("alertify", function() {
             },
 
             setDelay: function(time) {
-                var dur = parseInt(time || 0, 10);
-                this.delay = isNaN(dur) ? this.defultDelay : time;
+                time = time || 0;
+                this.delay = isNaN(time) ? this.defaultDelay : parseInt(time, 10);
                 return this;
             },
 
@@ -279,7 +380,40 @@ angular.module("ngAlertify", []).factory("alertify", function() {
                 this.maxLogItems = parseInt(num || this.defaultMaxLogItems);
             },
 
+            theme: function(themeStr) {
+                switch(themeStr.toLowerCase()) {
+                case "bootstrap":
+                    this.dialogs.buttons.ok = "<button class='ok btn btn-primary' tabindex='0'>{{ok}}</button>";
+                    this.dialogs.buttons.cancel = "<button class='cancel btn btn-default' tabindex='0'>{{cancel}}</button>";
+                    this.dialogs.input = "<input type='text' class='form-control'>";
+                    break;
+                case "purecss":
+                    this.dialogs.buttons.ok = "<button class='ok pure-button' tabindex='0'>{{ok}}</button>";
+                    this.dialogs.buttons.cancel = "<button class='cancel pure-button' tabindex='0'>{{cancel}}</button>";
+                    break;
+                case "mdl":
+                case "material-design-light":
+                    this.dialogs.buttons.ok = "<button class='ok mdl-button mdl-js-button mdl-js-ripple-effect'  tabindex='0'>{{ok}}</button>";
+                    this.dialogs.buttons.cancel = "<button class='cancel mdl-button mdl-js-button mdl-js-ripple-effect' tabindex='0'>{{cancel}}</button>";
+                    this.dialogs.input = "<div class='mdl-textfield mdl-js-textfield'><input class='mdl-textfield__input'><label class='md-textfield__label'></label></div>";
+                    break;
+                case "angular-material":
+                    this.dialogs.buttons.ok = "<button class='ok md-primary md-button' tabindex='0'>{{ok}}</button>";
+                    this.dialogs.buttons.cancel = "<button class='cancel md-button' tabindex='0'>{{cancel}}</button>";
+                    this.dialogs.input = "<div layout='column'><md-input-container md-no-float><input type='text'></md-input-container></div>";
+                    break;
+                case "default":
+                default:
+                    this.dialogs.buttons.ok = this.defaultDialogs.buttons.ok;
+                    this.dialogs.buttons.cancel = this.defaultDialogs.buttons.cancel;
+                    this.dialogs.input = this.defaultDialogs.input;
+                    break;
+                }
+            },
+
             reset: function() {
+                this.parent = document.body;
+                this.theme("default");
                 this.okBtn(this.defaultOkLabel);
                 this.cancelBtn(this.defaultCancelLabel);
                 this.setMaxLogItems();
@@ -287,39 +421,56 @@ angular.module("ngAlertify", []).factory("alertify", function() {
                 this.promptPlaceholder = "";
                 this.delay = this.defaultDelay;
                 this.setCloseLogOnClick(this.closeLogOnClickDefault);
+                this.setLogPosition("bottom left");
+                this.logTemplateMethod = null;
+            },
+
+            injectCSS: function() {
+                if (!document.querySelector("#alertifyCSS")) {
+                    var head = document.getElementsByTagName("head")[0];
+                    var css = document.createElement("style");
+                    css.type = "text/css";
+                    css.id = "alertifyCSS";
+                    css.innerHTML = ".alertify-logs>*{padding:12px 24px;color:#fff;box-shadow:0 2px 5px 0 rgba(0,0,0,.2);border-radius:1px;transition:all .2s;display:block!important}.alertify-logs>*,.alertify-logs>.default{background:rgba(0,0,0,.8)}.alertify-logs>.error{background:rgba(244,67,54,.8)}.alertify-logs>.success{background:rgba(76,175,80,.9)}.alertify{position:fixed;background-color:rgba(0,0,0,.3);left:0;right:0;top:0;bottom:0;width:100%;height:100%;z-index:1}.alertify.hide{opacity:0;pointer-events:none}.alertify,.alertify.show{box-sizing:border-box;transition:all .33s cubic-bezier(.25,.8,.25,1)}.alertify,.alertify *{box-sizing:border-box}.alertify .dialog{padding:12px}.alertify .alert,.alertify .dialog{width:100%;margin:0 auto;position:relative;top:50%;transform:translateY(-50%)}.alertify .alert>*,.alertify .dialog>*{width:400px;max-width:95%;margin:0 auto;text-align:center;padding:12px;background:#fff;box-shadow:0 2px 4px -1px rgba(0,0,0,.14),0 4px 5px 0 rgba(0,0,0,.098),0 1px 10px 0 rgba(0,0,0,.084)}.alertify .alert .msg,.alertify .dialog .msg{padding:12px;margin-bottom:12px;margin:0;text-align:left}.alertify .alert input:not(.form-control),.alertify .dialog input:not(.form-control){margin-bottom:15px;width:100%;font-size:100%;padding:12px}.alertify .alert input:not(.form-control):focus,.alertify .dialog input:not(.form-control):focus{outline-offset:-2px}.alertify .alert nav,.alertify .dialog nav{height:40px;text-align:right}.alertify .alert nav button,.alertify .dialog nav button{float:right;background:transparent;box-sizing:border-box;color:rgba(0,0,0,.87);position:relative;outline:0;border:0;display:block;-ms-flex-align:center;align-items:center;padding:0 6px;margin:6px 8px;line-height:36px;min-height:36px;white-space:nowrap;min-width:88px;text-align:center;text-transform:uppercase;font-size:14px;text-decoration:none;cursor:pointer;border:1px solid transparent;border-radius:2px}.alertify .alert nav button:active,.alertify .alert nav button:hover,.alertify .dialog nav button:active,.alertify .dialog nav button:hover{background-color:rgba(0,0,0,.05)}.alertify .alert nav button:focus,.alertify .dialog nav button:focus{border:1px solid rgba(0,0,0,.1)}.alertify .alert nav button.btn,.alertify .dialog nav button.btn{margin:6px 4px}.alertify .alert nav button[disabled].ok,.alertify .dialog nav button[disabled].ok{color:grey!important}.alertify .alert nav button[disabled].ok:active,.alertify .alert nav button[disabled].ok:hover,.alertify .dialog nav button[disabled].ok:active,.alertify .dialog nav button[disabled].ok:hover{background-color:#fff!important}.alertify .alert nav button[disabled].ok:focus,.alertify .dialog nav button[disabled].ok:focus{border:1px solid #fff!important}.alertify-logs{position:fixed;z-index:1}.alertify-logs.bottom,.alertify-logs:not(.top){bottom:16px}.alertify-logs.left,.alertify-logs:not(.right){left:16px}.alertify-logs.left>*,.alertify-logs:not(.right)>*{float:left;transform:translateZ(0);height:auto}.alertify-logs.left>.show,.alertify-logs:not(.right)>.show{left:0}.alertify-logs.left>*,.alertify-logs.left>.hide,.alertify-logs:not(.right)>*,.alertify-logs:not(.right)>.hide{left:-110%}.alertify-logs.right{right:16px}.alertify-logs.right>*{float:right;transform:translateZ(0)}.alertify-logs.right>.show{right:0;opacity:1}.alertify-logs.right>*,.alertify-logs.right>.hide{right:-110%;opacity:0}.alertify-logs.top{top:0}.alertify-logs>*{box-sizing:border-box;transition:all .4s cubic-bezier(.25,.8,.25,1);position:relative;clear:both;-webkit-backface-visibility:hidden;backface-visibility:hidden;perspective:1000;max-height:0;margin:0;padding:0;overflow:hidden;opacity:0;pointer-events:none}.alertify-logs>.show{margin-top:12px;opacity:1;max-height:1000px;padding:12px;pointer-events:auto}";
+                    head.insertBefore(css, head.firstChild);
+                }
+            },
+
+            removeCSS: function() {
+                var css = document.querySelector("#alertifyCSS");
+                if (css && css.parentNode) {
+                    css.parentNode.removeChild(css);
+                }
             }
 
         };
 
-        if (! hasCss) {
-            var head = document.getElementsByTagName("head")[0];
-            var css = document.createElement("style");
-            css.type = "text/css";
-            css.innerHTML = ".alertify-logs>*{padding:12px 24px;color:#fff;box-shadow:0 2px 5px 0 rgba(0,0,0,.2);border-radius:1px}.alertify-logs>*,.alertify-logs>.default{background:rgba(0,0,0,.8)}.alertify-logs>.error{background:rgba(244,67,54,.8)}.alertify-logs>.success{background:rgba(76,175,80,.9)}.alertify{position:fixed;background-color:rgba(0,0,0,.3);left:0;right:0;top:0;bottom:0;width:100%;height:100%;z-index:99999}.alertify.hide{opacity:0;pointer-events:none}.alertify,.alertify.hide,.alertify.show{box-sizing:border-box;-webkit-transition:all .33s cubic-bezier(.25,.8,.25,1);transition:all .33s cubic-bezier(.25,.8,.25,1)}.alertify,.alertify *{box-sizing:border-box}.alertify .dialog{padding:12px}.alertify .alert,.alertify .dialog{width:100%;margin:0 auto;position:relative;top:50%;-webkit-transform:translateY(-50%);-ms-transform:translateY(-50%);transform:translateY(-50%)}.alertify .alert>*,.alertify .dialog>*{width:400px;max-width:95%;margin:0 auto;text-align:center;padding:12px;background:#fff;box-shadow:0 2px 4px -1px rgba(0,0,0,.14),0 4px 5px 0 rgba(0,0,0,.098),0 1px 10px 0 rgba(0,0,0,.084)}.alertify .alert .msg,.alertify .dialog .msg{padding:12px;margin:0;text-align:left}.alertify .alert input,.alertify .dialog input{margin-bottom:15px;width:100%;font-size:100%;padding:12px}.alertify .alert input:focus,.alertify .dialog input:focus{outline-offset:-2px}.alertify .alert nav,.alertify .dialog nav{text-align:right}.alertify .alert nav button,.alertify .dialog nav button{background:0 0;box-sizing:border-box;color:rgba(0,0,0,.87);position:relative;outline:0;border:0;display:inline-block;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;padding:0 6px;margin:6px 8px;line-height:36px;min-height:36px;white-space:nowrap;min-width:88px;text-align:center;text-transform:uppercase;font-size:14px;text-decoration:none;cursor:pointer;border-radius:2px}.alertify .alert nav button:active,.alertify .alert nav button:hover,.alertify .dialog nav button:active,.alertify .dialog nav button:hover{background-color:rgba(0,0,0,.05)}.alertify .alert nav button:focus,.alertify .dialog nav button:focus{border-style:dashed}.alertify-logs{position:fixed;z-index:100;bottom:16px;left:16px}.alertify-logs>*{box-sizing:border-box;-webkit-transition:all .3s cubic-bezier(.25,.8,.25,1);transition:all .3s cubic-bezier(.25,.8,.25,1);margin-top:10px;position:relative;float:left;clear:both;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);-webkit-backface-visibility:hidden;backface-visibility:hidden;-webkit-perspective:1000;perspective:1000}.alertify-logs>.show{left:0;opacity:1}.alertify-logs>*,.alertify-logs>.hide{left:-110%;opacity:0}";
-            head.insertBefore(css, head.firstChild);
-            hasCss = true;
-        }
+        _alertify.injectCSS();
 
         return {
             _$$alertify: _alertify,
+            parent: function(elem) {
+                _alertify.parent = elem;
+            },
             reset: function() {
                 _alertify.reset();
                 return this;
             },
             alert: function(message, onOkay, onCancel) {
-                _alertify.dialog(message, "alert", onOkay, onCancel);
-                return this;
+                return _alertify.dialog(message, "alert", onOkay, onCancel) || this;
             },
             confirm: function(message, onOkay, onCancel) {
-                _alertify.dialog(message, "confirm", onOkay, onCancel);
-                return this;
+                return _alertify.dialog(message, "confirm", onOkay, onCancel) || this;
             },
             prompt: function(message, onOkay, onCancel) {
-                _alertify.dialog(message, "prompt", onOkay, onCancel);
-                return this;
+                return _alertify.dialog(message, "prompt", onOkay, onCancel) || this;
             },
             log: function(message, click) {
                 _alertify.log(message, "default", click);
+                return this;
+            },
+            theme: function(themeStr) {
+                _alertify.theme(themeStr);
                 return this;
             },
             success: function(message, click) {
@@ -357,13 +508,33 @@ angular.module("ngAlertify", []).factory("alertify", function() {
             closeLogOnClick: function(bool) {
                 _alertify.setCloseLogOnClick(!! bool);
                 return this;
-            }
+            },
+            logPosition: function(str) {
+                _alertify.setLogPosition(str || "");
+                return this;
+            },
+            setLogTemplate: function(templateMethod) {
+                _alertify.logTemplateMethod = templateMethod;
+                return this;
+            },
+            clearLogs: function() {
+                _alertify.setupLogContainer().innerHTML = "";
+                return this;
+            },
+            version: _alertify.version
         };
     }
 
     // AMD, window, and NPM support
     if ("undefined" !== typeof module && !! module && !! module.exports) {
-        module.exports = Alertify;
+        // Preserve backwards compatibility
+        module.exports = function() {
+            return new Alertify();
+        };
+        var obj = new Alertify();
+        for (var key in obj) {
+            module.exports[key] = obj[key];
+        }
     } else if (typeof define === "function" && define.amd) {
         define(function() {
             return new Alertify();
