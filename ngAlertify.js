@@ -301,7 +301,7 @@ angular.module("ngAlertify", []).factory("alertify", function() {
         }
 
         return {
-            _$alertify: _alertify,
+            _$$alertify: _alertify,
             reset: function() {
                 _alertify.reset();
                 return this;

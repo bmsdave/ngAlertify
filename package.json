@@ -1,6 +1,6 @@
 {
-  "name": "ngalertify",
-  "version": "1.0.2",
+  "name": "bmsdave-ngalertify",
+  "version": "1.0.4",
   "description": "Angular JS module for Alertify.js",
   "main": "ngAlertify.js",
   "scripts": {
