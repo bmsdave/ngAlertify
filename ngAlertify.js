@@ -280,46 +280,53 @@ angular.module("ngAlertify", []).factory("alertify", function() {
                         resolve = function () {};
                     }
 
-                    if (btnOK) {
-                        btnOK.addEventListener("click", function(ev) {
-                            if (item.onOkay && "function" === typeof item.onOkay) {
-                                if (input) {
-                                    item.onOkay(input.value, ev);
-                                } else {
-                                    item.onOkay(ev);
-                                }
-                            }
-
+                    function okHandler(ev) {
+                        if (item.onOkay && "function" === typeof item.onOkay) {
                             if (input) {
-                                resolve({
-                                    buttonClicked: "ok",
-                                    inputValue: input.value,
-                                    event: ev
-                                });
+                                item.onOkay(input.value, ev);
                             } else {
-                                resolve({
-                                    buttonClicked: "ok",
-                                    event: ev
-                                });
+                                item.onOkay(ev);
                             }
+                        }
 
-                            hideElement(el);
+                        if (input) {
+                            resolve({
+                                buttonClicked: "ok",
+                                inputValue: input.value,
+                                event: ev
+                            });
+                        } else {
+                            resolve({
+                                buttonClicked: "ok",
+                                event: ev
+                            });
+                        }
+
+                        hideElement(el);
+                    }
+
+                    function cancelHandler(ev) {
+                        if (item.onCancel && "function" === typeof item.onCancel) {
+                            item.onCancel(ev);
+                        }
+
+                        resolve({
+                            buttonClicked: "cancel",
+                            event: ev
                         });
+
+                        hideElement(el);
+                    }
+
+                    if (btnOK) {
+                        btnOK.addEventListener("click", okHandler);
                     }
 
                     if (btnCancel) {
-                        btnCancel.addEventListener("click", function(ev) {
-                            if (item.onCancel && "function" === typeof item.onCancel) {
-                                item.onCancel(ev);
-                            }
-
-                            resolve({
-                                buttonClicked: "cancel",
-                                event: ev
-                            });
-
-                            hideElement(el);
-                        });
+                        btnCancel.addEventListener("click", cancelHandler);
+                        el.addEventListener("click", cancelHandler);
+                    } else {
+                        el.addEventListener("click", okHandler);
                     }
 
                     if (input) {
